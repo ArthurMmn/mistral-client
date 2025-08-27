@@ -1,4 +1,9 @@
+/!\ FORKED BY ME
+Library was old and I needed quickly a few more endpoits.
+This probably wont last long, there is not much that can't be done in one afternoon inside my apps.
+
 # Mistral_Client
+
 [![Hex.pm Version](https://img.shields.io/hexpm/v/mistral_client)](https://hex.pm/packages/mistral_client)
 [![Hex.pm Download Total](https://img.shields.io/hexpm/dt/mistral_client)](https://hex.pm/packages/mistral_client)
 
@@ -7,7 +12,8 @@ Unofficial community-maintained Elixr wrapper for Mistral's platform REST APIs
 See https://docs.mistral.ai/ for further info on REST endpoints
 
 ## Installation
-Add ***:mistral_client*** as a dependency in your mix.exs file.
+
+Add **_:mistral_client_** as a dependency in your mix.exs file.
 
 ```elixir
 def deps do
@@ -18,6 +24,7 @@ end
 ```
 
 ## Configuration
+
 You can configure mistral_client in your mix config.exs (default $project_root/config/config.exs). If you're using Phoenix add the configuration in your config/dev.exs|test.exs|prod.exs files. An example config is:
 
 ```elixir
@@ -31,7 +38,9 @@ config :mistral_client,
   api_url: "https://api.mistral.ai/"
 
 ```
+
 ## Configuration override
+
 Client library configuration can be overwritten in runtime by passing MistralClient.config(api_key: "KEY", http_options: [recv_timeout: 15_000]) as last argument of the function you need to use. For instance if you need to use a different `api_key`, or `http_options` you can simply do:
 
 ```elixir
@@ -66,46 +75,55 @@ MistralClient.chat(
 you can perform a config override in all the functions, note that `params` argument must be passed explicitly as a list in square brackets if the configuration is to be overwritten, as in the example above.
 
 ## Usage overview
+
 Get your API key from https://console.mistral.ai/users/api-keys/
 
 ### models()
+
 Retrieve the list of available models
+
 ### Example request
+
 ```elixir
   MistralClient.models()
 ```
+
 #### Example response
-  ```elixir
-  {:ok,
-    %{
-      data: [
-        %{
-          "created" => 1702997889,
-          "id" => "mistral-medium-latest",
-          "object" => "model",
-          "owned_by" => "mistralai",
-          "parent" => nil,
-          "permission" => [
-            %{
-              "allow_create_engine" => false,
-              "allow_fine_tuning" => false,
-              "allow_logprobs" => false,
-              ....
-             }
-          ],
-          "root" => nil
-        }
-        ....],
-      object: "list"
-    }
+
+```elixir
+{:ok,
+  %{
+    data: [
+      %{
+        "created" => 1702997889,
+        "id" => "mistral-medium-latest",
+        "object" => "model",
+        "owned_by" => "mistralai",
+        "parent" => nil,
+        "permission" => [
+          %{
+            "allow_create_engine" => false,
+            "allow_fine_tuning" => false,
+            "allow_logprobs" => false,
+            ....
+           }
+        ],
+        "root" => nil
+      }
+      ....],
+    object: "list"
   }
+}
 ```
+
 See: https://docs.mistral.ai/api#operation/listModels
 
 ### chat()
+
 Creates a completion for the chat message
 
 #### Example request
+
 ```elixir
 MistralClient.chat(
   "model": "open-mistral-7b",
@@ -119,6 +137,7 @@ MistralClient.chat(
 ```
 
 #### Example response
+
 ```elixir
   {:ok,
     %{
@@ -148,9 +167,11 @@ MistralClient.chat(
 See: https://docs.mistral.ai/api#operation/createChatCompletion for the complete list of parameters you can pass to the chat function
 
 ### chat() with stream
-Creates a completion for the chat message, by default it streams to `self()`, but you can override the configuration by passing a config override to the function with a different `stream_to`  http_options parameter.
+
+Creates a completion for the chat message, by default it streams to `self()`, but you can override the configuration by passing a config override to the function with a different `stream_to` http_options parameter.
 
 #### Example request
+
 ```elixir
 MistralClient.chat(
   [
@@ -161,7 +182,7 @@ MistralClient.chat(
     stream: true
   ],
   MistralClient.config(http_options: %{stream_to: self(), async: :once})
-) 
+)
 |> Stream.each(fn res ->
   IO.inspect(res)
 end)
@@ -169,6 +190,7 @@ end)
 ```
 
 #### Example response
+
 ```elixir
   %{
     "choices" => [
@@ -215,6 +237,7 @@ end)
 ### embeddings(params)
 
 #### Example request
+
 ```elixir
 MistralClient.embeddings(
   model: "mistral-embed",
@@ -226,6 +249,7 @@ MistralClient.embeddings(
 ```
 
 #### Example response
+
 ```elixir
   {:ok,
    %{
@@ -279,10 +303,13 @@ MistralClient.embeddings(
     }
   }}
 ```
+
 See: https://docs.mistral.ai/api#operation/createEmbedding
 
 ## Other
+
 This client library was inspired and contains snippets from https://github.com/mgallo/openai.ex
 
 ## License
+
 The package is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).

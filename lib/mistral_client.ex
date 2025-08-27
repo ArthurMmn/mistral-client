@@ -6,17 +6,21 @@ defmodule MistralClient do
 
   use Application
 
-  alias MistralClient.Config
-  alias MistralClient.Models
+  alias MistralClient.Agent
   alias MistralClient.Chat
+  alias MistralClient.Config
+  alias MistralClient.Conversation
+  alias MistralClient.Document
   alias MistralClient.Embeddings
-  
+  alias MistralClient.Library
+  alias MistralClient.Models
+
   def start(_type, _args) do
     children = [Config]
     opts = [strategy: :one_for_one, name: MistralClient.Supervisor]
 
     Supervisor.start_link(children, opts)
-  end  
+  end
 
   @doc """
   Retrieve the list of available models
@@ -24,7 +28,7 @@ defmodule MistralClient do
   ```elixir
   MistralClient.models()
   ```
-  
+
   ## Example response
   ```elixir
   {:ok,
@@ -50,7 +54,7 @@ defmodule MistralClient do
     }
   }
   ```
-  
+
   See: https://docs.mistral.ai/api#operation/listModels
   """
 
@@ -58,7 +62,7 @@ defmodule MistralClient do
 
   @doc """
   Creates a completion for the chat message
-  
+
   ## Example request
   ```elixir
   MistralClient.chat(
@@ -71,7 +75,7 @@ defmodule MistralClient do
     ]
   )
   ```
-  
+
   ## Example response
   ```elixir
   {:ok,
@@ -79,8 +83,8 @@ defmodule MistralClient do
       choices: [
         %{
           "finish_reason" => "stop",
-	  "index" => 0,
-	  "message" => %{
+   "index" => 0,
+   "message" => %{
             "content" => "It's subjective to determine the 'best' French cheese as it depends on personal preferences. Here are some popular and highly regarded French cheeses in various categories:\n\n1. Soft and Bloomy Rind: Brie de Meaux or Brie de Melun, Camembert de Normandie\n2. Hard and Cooked: Comté, Gruyère\n3. Hard and Uncooked: Cheddar-like: Comté, Beaufort, Appenzeller-style: Vacherin Fribourgeois, Alpine-style: Reblochon\n4. Blue Cheese: Roquefort, Fourme d'Ambert\n5. Goat Cheese: Chavignol, Crottin de Chavignol, Sainte-Maure de Touraine\n\nHowever, I would recommend trying a variety of French cheeses to discover your favorite. It's an enjoyable and delicious experience!",
             "role" => "assistant"
           }
@@ -98,9 +102,9 @@ defmodule MistralClient do
    }
   }
   ```
-  
+
   N.B. to use "stream" mode you must be set http_options as below when you want to treat the chat completion as a stream. You may also pass in the api_key in the same way, or define in the config.exs of your elixir project.
-  
+
   ## Example request (stream)
   ```elixir
   MistralClient.chat(
@@ -118,7 +122,7 @@ defmodule MistralClient do
   end)
   |> Stream.run()
   ```
-  
+
   ## Example response (stream)
   ```elixir
   %{
@@ -161,17 +165,20 @@ defmodule MistralClient do
     "object" => "chat.completion.chunk"
   }
   ```
-  
+
   See: https://docs.mistral.ai/api#operation/createChatCompletion for the complete list of parameters you can pass to the chat function
   """
-
   def chat(params, config \\ Config.config(%{})) do
     Chat.fetch(params, config)
   end
 
-@doc """
+  def agent_completion(params, config \\ Config.config(%{})) do
+    Agent.completion(params, config)
+  end
+
+  @doc """
   Creates an embedding vector representing the input text.
-  
+
   ## Example request
   ```elixir
   MistralClient.embeddings(
@@ -182,7 +189,7 @@ defmodule MistralClient do
     ]
   )
   ```
-  
+
   ## Example response
   ```elixir
   {:ok,
@@ -237,17 +244,175 @@ defmodule MistralClient do
     }
   }}
   ```
-  
   See: https://docs.mistral.ai/api#operation/createEmbedding
   """
-
   def embeddings(params, config \\ Config.config(%{})) do
     Embeddings.fetch(params, config)
-  end  
+  end
+
+  @doc """
+  List all conversations.
+
+  ## Example request
+  ```elixir
+  MistralClient.conversations()
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      data: [
+        %{
+          "id" => "conv123",
+          "messages" => [
+            %{"role" => "user", "content" => "Hello!"},
+            %{"role" => "assistant", "content" => "Hi there!"}
+          ],
+          "created_at" => "2023-12-01T10:00:00Z",
+          "updated_at" => "2023-12-01T10:30:00Z"
+        }
+      ]
+    }
+  }
+  ```
+  """
+  def conversations(params \\ [], config \\ Config.config(%{})) do
+    Conversation.list(params, config)
+  end
+
+  @doc """
+  Create or update a conversation.
+
+  ## Example request (create new)
+  ```elixir
+  MistralClient.conversation(nil,
+    messages: [
+      %{role: "user", content: "Hello!"}
+    ]
+  )
+  ```
+
+  ## Example request (update existing)
+  ```elixir
+  MistralClient.conversation("conv123",
+    messages: [
+      %{role: "user", content: "Hello!"},
+      %{role: "assistant", content: "Hi there!"},
+      %{role: "user", content: "How are you?"}
+    ]
+  )
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      "id" => "conv123",
+      "messages" => [
+        %{"role" => "user", "content" => "Hello!"},
+        %{"role" => "assistant", "content" => "Hi there!"}
+      ],
+      "created_at" => "2023-12-01T10:00:00Z",
+      "updated_at" => "2023-12-01T10:30:00Z"
+    }
+  }
+  ```
+  """
+  def conversation(conversation_id, params, config \\ Config.config(%{})) do
+    Conversation.create_or_continue(conversation_id, params, config)
+  end
+
+  @doc """
+  Get the history of a conversation.
+
+  ## Example request
+  ```elixir
+  MistralClient.conversation_history("conv123")
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      "messages" => [
+        %{"role" => "user", "content" => "Hello!", "timestamp" => "2023-12-01T10:00:00Z"},
+        %{"role" => "assistant", "content" => "Hi there!", "timestamp" => "2023-12-01T10:01:00Z"},
+        %{"role" => "user", "content" => "How are you?", "timestamp" => "2023-12-01T10:02:00Z"}
+      ],
+      "total" => 3,
+      "conversation_id" => "conv123"
+    }
+  }
+  ```
+  """
+  def conversation_history(conversation_id, params \\ [], config \\ Config.config(%{})) do
+    Conversation.history(conversation_id, params, config)
+  end
+
+  @doc """
+  Create a new conversation (convenience function).
+
+  ## Example request
+  ```elixir
+  MistralClient.create_conversation(
+    messages: [
+      %{role: "user", content: "Start a new conversation"}
+    ]
+  )
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      "id" => "conv456",
+      "messages" => [
+        %{"role" => "user", "content" => "Start a new conversation"}
+      ],
+      "created_at" => "2023-12-01T10:00:00Z",
+      "updated_at" => "2023-12-01T10:00:00Z"
+    }
+  }
+  ```
+  """
+  def create_conversation(params, config \\ Config.config(%{})) do
+    Conversation.create_or_continue(nil, params, config)
+  end
+
+  @doc """
+  Update an existing conversation (convenience function).
+
+  ## Example request
+  ```elixir
+  MistralClient.update_conversation("conv123",
+    messages: [
+      %{role: "user", content: "Updated message"}
+    ]
+  )
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      "id" => "conv123",
+      "messages" => [
+        %{"role" => "user", "content" => "Updated message"}
+      ],
+      "created_at" => "2023-12-01T10:00:00Z",
+      "updated_at" => "2023-12-01T10:35:00Z"
+    }
+  }
+  ```
+  """
+  def update_conversation(conversation_id, params, config \\ Config.config(%{})) do
+    Conversation.create_or_continue(conversation_id, params, config)
+  end
 
   @doc """
   Generates the config settings from the given params, using the defaults defined in the application's config.exs if not passed in params.
-  
+
   ## Example request
   ```elixir
   MistralClient.config(
@@ -259,14 +424,394 @@ defmodule MistralClient do
   )
   ```
   """
-
   def config(params) do
-    opts = case params do
-	     params_list when is_list(params_list) ->
-	       Enum.into(params_list, %{})
-	     _ -> params
-	   end
+    opts =
+      case params do
+        params_list when is_list(params_list) ->
+          Enum.into(params_list, %{})
+
+        _ ->
+          params
+      end
+
     Config.config(opts)
   end
-  
+
+  @doc """
+  List all libraries.
+
+  ## Example request
+  ```elixir
+  MistralClient.libraries()
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      data: [
+        %{
+          "id" => "1",
+          "name" => "My Library",
+          "description" => "A sample library",
+          "created_at" => "2023-12-01T10:00:00Z",
+          "updated_at" => "2023-12-01T10:00:00Z"
+        }
+      ]
+    }
+  }
+  ```
+  """
+  def libraries(params \\ [], config \\ Config.config(%{})) do
+    Library.list(params, config)
+  end
+
+  @doc """
+  Create a new library.
+
+  ## Example request
+  ```elixir
+  MistralClient.create_library(
+    name: "New Library",
+    description: "A new library for testing"
+  )
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      "id" => "123",
+      "name" => "New Library",
+      "description" => "A new library for testing",
+      "created_at" => "2023-12-01T10:00:00Z",
+      "updated_at" => "2023-12-01T10:00:00Z"
+    }
+  }
+  ```
+  """
+  def create_library(params, config \\ Config.config(%{})) do
+    Library.create(params, config)
+  end
+
+  @doc """
+  Get a specific library by ID.
+
+  ## Example request
+  ```elixir
+  MistralClient.library("123")
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      "id" => "123",
+      "name" => "My Library",
+      "description" => "A sample library",
+      "created_at" => "2023-12-01T10:00:00Z",
+      "updated_at" => "2023-12-01T10:00:00Z"
+    }
+  }
+  ```
+  """
+  def library(id, config \\ Config.config(%{})) do
+    Library.get(id, config)
+  end
+
+  @doc """
+  Update an existing library by ID.
+
+  ## Example request
+  ```elixir
+  MistralClient.update_library("123", name: "Updated Name")
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      "id" => "123",
+      "name" => "Updated Name",
+      "description" => "A sample library",
+      "created_at" => "2023-12-01T10:00:00Z",
+      "updated_at" => "2023-12-01T10:30:00Z"
+    }
+  }
+  ```
+  """
+  def update_library(id, params, config \\ Config.config(%{})) do
+    Library.update(id, params, config)
+  end
+
+  @doc """
+  Delete a library by ID.
+
+  ## Example request
+  ```elixir
+  MistralClient.delete_library("123")
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok, %{"message" => "Library deleted successfully"}}
+  ```
+  """
+  def delete_library(id, config \\ Config.config(%{})) do
+    Library.delete(id, config)
+  end
+
+  @doc """
+  List all documents in a library.
+
+  ## Example request
+  ```elixir
+  MistralClient.documents("lib123")
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      data: [
+        %{
+          "id" => "doc1",
+          "name" => "My Document",
+          "library_id" => "lib123",
+          "created_at" => "2023-12-01T10:00:00Z",
+          "updated_at" => "2023-12-01T10:00:00Z"
+        }
+      ]
+    }
+  }
+  ```
+  """
+  def documents(library_id, params \\ [], config \\ Config.config(%{})) do
+    Document.list(library_id, params, config)
+  end
+
+  def document(library_id, document_id, params \\ [], config \\ Config.config(%{})) do
+    Document.get(library_id, document_id, params, config)
+  end
+
+  @doc """
+  Create a new document in a library by uploading a file.
+
+  ## Example request
+  ```elixir
+  MistralClient.create_document("lib123", "/path/to/document.pdf")
+  ```
+
+  ## Example request with additional parameters
+  ```elixir
+  MistralClient.create_document("lib123", "/path/to/document.pdf", [metadata: "custom"])
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      "id" => "doc456",
+      "name" => "document.pdf",
+      "library_id" => "lib123",
+      "created_at" => "2023-12-01T10:00:00Z",
+      "updated_at" => "2023-12-01T10:00:00Z"
+    }
+  }
+  ```
+  """
+  def create_document(library_id, file_path, params \\ [], config \\ Config.config(%{})) do
+    Document.create(library_id, file_path, params, config)
+  end
+
+  @doc """
+  Create a new document in a library with a custom filename.
+
+  This function is specifically designed to work with Phoenix file uploads,
+  preserving the original filename from the upload.
+
+  ## Example request in Phoenix controller
+  ```elixir
+  def create_document(conn, %{"library_id" => library_id, "file" => upload}) do
+    case MistralClient.create_document_with_filename(library_id, upload.path, upload.filename) do
+      {:ok, document} ->
+        json(conn, document)
+      {:error, reason} ->
+        conn |> put_status(400) |> json(%{error: reason})
+    end
+  end
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      "id" => "doc456",
+      "name" => "original_document.pdf",
+      "library_id" => "lib123",
+      "created_at" => "2023-12-01T10:00:00Z",
+      "updated_at" => "2023-12-01T10:00:00Z"
+    }
+  }
+  ```
+  """
+  def create_document_with_filename(
+        library_id,
+        file_path,
+        filename,
+        params \\ [],
+        config \\ Config.config(%{})
+      ) do
+    Document.create_with_filename(library_id, file_path, filename, params, config)
+  end
+
+  @doc """
+  Delete a document from a library.
+
+  ## Example request
+  ```elixir
+  MistralClient.delete_document("lib123", "doc456")
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok, %{"message" => "Document deleted successfully"}}
+  ```
+  """
+  def delete_document(library_id, document_id, config \\ Config.config(%{})) do
+    Document.delete(library_id, document_id, config)
+  end
+
+  @doc """
+  Get the text content of a specific document.
+
+  ## Example request
+  ```elixir
+  MistralClient.document_text_content("lib123", "doc456")
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      "content" => "This is the document content...",
+      "format" => "text/plain"
+    }
+  }
+  ```
+  """
+  def document_text_content(library_id, document_id, config \\ Config.config(%{})) do
+    Document.text_content(library_id, document_id, config)
+  end
+
+  @doc """
+  List all agents.
+
+  ## Example request
+  ```elixir
+  MistralClient.agents()
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    [
+      %{
+        "id" => "agent123",
+        "name" => "My Agent",
+        "description" => "A helpful agent",
+        "object" => "agent",
+        "model" => "mistral-large-latest",
+        "instructions" => "You are a helpful assistant",
+        "tools" => [],
+        "completion_args" => %{
+          "temperature" => 0.7,
+          "max_tokens" => 1000
+        },
+        "created_at" => "2023-12-01T10:00:00Z",
+        "updated_at" => "2023-12-01T10:00:00Z",
+        "version" => 1
+      }
+    ]
+  }
+  ```
+  """
+  def agents(params \\ [], config \\ Config.config(%{})) do
+    Agent.list(params, config)
+  end
+
+  @doc """
+  Get a specific agent by ID.
+
+  ## Example request
+  ```elixir
+  MistralClient.agent("agent123")
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      "id" => "agent123",
+      "name" => "My Agent",
+      "description" => "A helpful agent",
+      "object" => "agent",
+      "model" => "mistral-large-latest",
+      "instructions" => "You are a helpful assistant",
+      "tools" => [],
+      "completion_args" => %{
+        "temperature" => 0.7,
+        "max_tokens" => 1000
+      },
+      "created_at" => "2023-12-01T10:00:00Z",
+      "updated_at" => "2023-12-01T10:00:00Z",
+      "version" => 1
+    }
+  }
+  ```
+  """
+  def agent(id, config \\ Config.config(%{})) do
+    Agent.get(id, config)
+  end
+
+  @doc """
+  Update an existing agent by ID.
+
+  ## Example request
+  ```elixir
+  MistralClient.update_agent("agent123",
+    name: "Updated Agent Name",
+    instructions: "You are an updated helpful assistant"
+  )
+  ```
+
+  ## Example response
+  ```elixir
+  {:ok,
+    %{
+      "id" => "agent123",
+      "name" => "Updated Agent Name",
+      "description" => "A helpful agent",
+      "object" => "agent",
+      "model" => "mistral-large-latest",
+      "instructions" => "You are an updated helpful assistant",
+      "tools" => [],
+      "completion_args" => %{
+        "temperature" => 0.7,
+        "max_tokens" => 1000
+      },
+      "created_at" => "2023-12-01T10:00:00Z",
+      "updated_at" => "2023-12-01T10:30:00Z",
+      "version" => 2
+    }
+  }
+  ```
+  """
+  def update_agent(id, params, config \\ Config.config(%{})) do
+    Agent.update(id, params, config)
+  end
+
+  def create_agent(params, config \\ Config.config(%{})) do
+    Agent.create(params, config)
+  end
 end
